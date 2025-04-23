@@ -1,0 +1,16 @@
+{
+    "name": "my_map_component",
+    "version": "1.0.0",
+    "scripts": {
+      "build": "parcel build src/index.html --public-url ./ --out-dir build"
+    },
+    "dependencies": {
+      "leaflet": "^1.9.4",
+      "react": "^18.2.0",
+      "react-dom": "^18.2.0",
+      "streamlit-component-lib": "^1.3.0"
+    },
+    "devDependencies": {
+      "parcel-bundler": "^1.12.5"
+    }
+  }
