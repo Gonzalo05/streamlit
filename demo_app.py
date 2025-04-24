@@ -202,7 +202,7 @@ def inject_css():
         gap: 40px;
     }
 
-    #time-cost-prediction, #budget-driven-prediction, #duration-cost-prediction{
+    #time-cost-prediction, #budget-driven-prediction, #charge-cost-prediction{
         font-weight: 700;
         text-align: center;
         font-size: 50px;
