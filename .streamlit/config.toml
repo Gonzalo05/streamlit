@@ -1,2 +1,6 @@
 [theme]
 base="light"
+primaryColor = "#000000"        # ← sets accent to black
+backgroundColor = "#FFFFFF"     # optional: page background
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#000000"

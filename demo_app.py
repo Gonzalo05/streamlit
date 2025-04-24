@@ -18,12 +18,16 @@ def inject_css():
     st.markdown("""
     <style>
     :root {
-        --primary-bg: #FFFFFF;
-        --secondary-bg: #F0F2F6;
-        --primary-text: #262730;
-        --secondary-text: #6E7191;
-        --tertiary-bg: #DFE0EB;
-        --accent-color: #FF4B4B;
+        --primary-bg: #FFFFFF!important;
+        --secondary-bg: #F0F2F6!important;
+        --primary-text: #262730!important;
+        --secondary-text: #6E7191!important;
+        --tertiary-bg: #DFE0EB!important;
+        --accent-color: #blue!important;
+    }
+    
+    button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"]{
+        display: none;
     }
     html, body, [data-testid="stAppViewContainer"], .block-container {
         margin: 0;
@@ -34,6 +38,12 @@ def inject_css():
     }
     #MainMenu, header, footer {
         visibility: hidden;
+    }
+    .st-c4, .st-emotion-cache-1dj3ksd{
+        background-color: black!important;
+    }
+    .st-emotion-cache-b92z60{
+        color: black!important;
     }
     iframe{
         position:fixed;
@@ -87,10 +97,8 @@ def inject_css():
         background: black!important;
         color: white!important;
     }
-    .st-bn{
-        background-color: black!important;
-    }
 
+    
     .modal-overlay { 
         position: fixed;
         width: 100vw;
@@ -187,14 +195,14 @@ def inject_css():
         color: black;
     }
 
-    #outputcontainer{
+    .outputcontainer{
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 40px;
     }
 
-    #time-cost-prediction{
+    #time-cost-prediction, #budget-driven-prediction, #duration-cost-prediction{
         font-weight: 700;
         text-align: center;
         font-size: 50px;
@@ -517,7 +525,7 @@ if st.session_state.get("show_predict"):
 
             container.markdown("### Time & Cost Prediction")
             container.markdown(f'''
-            <div id="outputcontainer">
+            <div class="outputcontainer">
                 <div class="output">
                     <div class="title">Chargin Time</div>
                     <div class="content">{hours}</div>
@@ -530,7 +538,7 @@ if st.session_state.get("show_predict"):
             </div>
             ''', unsafe_allow_html=True)
 
-        elif mode == "Duration & Cost":
+        elif mode == "Charge & Cost":
             # User gives duration; we compute energy & cost
             # Here we randomize for demo
             dur = np.round(np.random.uniform(1, 3), 2)          # hours
@@ -538,11 +546,30 @@ if st.session_state.get("show_predict"):
             cost = np.round(energy * price_kwh, 2)
             final_soc = np.round(np.random.uniform(50, 100), 1)   # %
             
-            container.markdown("### Duration & Cost Prediction")
-            container.write(f"⏱️ **Charge duration:** {dur} hours")
-            container.write(f"🔋 **Energy delivered:** {energy} kWh")
-            container.write(f"⚡ **Final SoC:** {final_soc}%")
-            container.write(f"💶 **Estimated cost:** €{cost}")
+            container.markdown("### Charge & Cost Prediction")
+            container.markdown(f'''
+            <div class="outputcontainer">
+                <div class="output">
+                    <div class="title">Charge duration</div>
+                    <div class="content">{dur}</div>
+                    <div class="contentinfo">Hours</div>
+                </div>
+                <div class="output">
+                    <div class="title">Energy delivered</div>
+                    <div class="content">{energy}</div>
+                    <div class="contentinfo">kWh</div>
+                </div>
+                <div class="output">
+                    <div class="title">Final SoC</div>
+                    <div class="content">{final_soc}</div>
+                    <div class="contentinfo">%</div>
+                </div>
+                <div class="output">
+                    <div class="title">Estimated cost</div>
+                    <div class="content">€{final_soc}</div>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
 
         else:  # Budget-Driven
             # User gives budget; we compute energy & duration
@@ -553,9 +580,27 @@ if st.session_state.get("show_predict"):
             final_soc = np.round(np.random.uniform(40, 90), 1)    # %
             
             container.markdown("### Budget-Driven Prediction")
-            container.write(f"💶 **Budget:** €{budget}")
-            container.write(f"🔋 **Energy purchased:** {energy} kWh")
-            container.write(f"⏱️ **Charging time:** {hours} hours")
-            container.write(f"⚡ **Final SoC:** {final_soc}%")
+            container.markdown(f'''
+            <div class="outputcontainer">
+                <div class="output">
+                    <div class="title">Budget</div>
+                    <div class="content">€{budget}</div>
+                </div>
+                <div class="output">
+                    <div class="title">Energy purchased</div>
+                    <div class="content">{energy}</div>
+                    <div class="contentinfo">kWh</div>
+                </div>
+                <div class="output">
+                    <div class="title">Charging time</div>
+                    <div class="content">{hours}</div>
+                    <div class="contentinfo">Hours</div>
+                </div>
+                <div class="output">
+                    <div class="title">Estimated cost</div>
+                    <div class="content">{final_soc}%</div>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
             
     container.markdown('</div>', unsafe_allow_html=True)
