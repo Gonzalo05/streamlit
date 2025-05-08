@@ -1,10 +1,7 @@
 import streamlit as st
 from my_map_component import my_map
 from geopy.geocoders import Nominatim
-import requests
-import pandas as pd
 import matplotlib.pyplot as plt
-import streamlit as st
 import numpy as np
 import pytz
 import plotly.express as px
@@ -25,8 +22,8 @@ import urllib.parse
 API_KEY = "39dc9e88-98fb-449f-ae0f-f44d99a4fc5b"
 LATITUDE = 35.7968864
 LONGITUDE = -78.8080444
-DISTANCE = 50
-MAX_RESULTS = 300
+DISTANCE = 100
+MAX_RESULTS = 500
 EM_TOKEN = "WL8ZxbXPsYcbQsQAoFq9"          
 EM_URL   = "https://api.electricitymap.org/v3/carbon-intensity/forecast"
 EM_URL_HIST = "https://api.electricitymap.org/v3/carbon-intensity/history"
@@ -39,7 +36,7 @@ GEOCODE_REVERSE_URL = "https://api.openrouteservice.org/geocode/reverse"
 
 #____Load EV Data_______________________________________________________________________________________
 # Load EV data once
-@st.cache_data
+@st.cache_data(ttl=None, show_spinner=False)
 def load_data():
     with open(DATA_PATH, 'r', encoding='utf-8') as f:
         return json.load(f)
@@ -66,427 +63,16 @@ model = load_model("predictions/ev_energy_prediction.joblib")
 pipe = load_model("predictions/ev_duration_prediction.joblib")
 
 @st.cache_resource
-def inject_css():
-    st.markdown("""
-    <style>
-    :root {
-        --primary-bg: #FFFFFF!important;
-        --secondary-bg: #F0F2F6!important;
-        --primary-text: #262730!important;
-        --secondary-text: #6E7191!important;
-        --tertiary-bg: #DFE0EB!important;
-        --accent-color: #blue!important;
-    }
-    
-    .topCharger{
-        display: grid;
-        grid-template-columns: 55px 1fr;
-        font-size: 22px;
-        grid-gap: 15px;
-        text-align: center;
-        margin-bottom: 10px;
-    }
-    
-    .topMetric{
-        width: 100%;
-        padding-left: 85px;
-        pading-right: 30px;
-        display: grid;
-        grid-template-columns: 2fr 1fr 1fr 1fr;
-        grid-gap: 20px;
-        text-align: center;
-        font-size: 20px;
-        margin-bottom: 10px;
-        text-align: center;
-        border-bottom: 1px gray solid;
-    }
-    
-    .topTitle{
-        font-weight: 800;
-        font-size: 35px;
-        text-align: center;
-        margin-bottom: 10px;
-        margin-top: 20px;
-    }
-    
-    .topContent{
-        display: grid;
-        grid-template-columns: 2fr 1fr 1fr 1fr;
-        grid-gap: 20px;
-        background: rgb(240, 242, 246);
-        border-radius: 15px;
-        padding: 10px 30px;
-    }
-    
-    .topRank, .TopTotal, .topLoc{
-        font-weight: 800;
-    }
-    
-    .topLoc > a{
-        text-align: left;
-        color: black;
-        text-decoration: none;
-    }
-    
-    .topContainer > .topCharger:nth-of-type(2) > .topContent{
-        background: black;
-        color: white;
-    }
-    
-    .topContainer > .topCharger:nth-of-type(2) > .topContent > .topLoc > a{
-        color: white;
-    }
-    
-    .topRank{
-        text-align: center;
-        font-weight: 800;
-        background: black;
-        color: white;
-        border-radius: 10px;
-        font-size: 30px;
-        line-height: 53px;
-    }
-    
-    .stSidebar, div[data-testid="stSidebarCollapsedControl"]{
-        display:none!important;
-    }
-    
-    button[data-testid="stNumberInputStepUp"], button[data-testid="stNumberInputStepDown"]{
-        display: none;
-    }
-    html, body, [data-testid="stAppViewContainer"], .block-container {
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden; /* no scrollbars */
-    }
-    #MainMenu, header, footer {
-        visibility: hidden;
-    }
-    .st-emotion-cache-b92z60{
-        color: black!important;
-    }
-    iframe{
-        position:fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-    }
-    .info-box, .stVerticalBlock:has(#info){
-        padding: 10px;
-        position: fixed;
-        bottom: 20px;
-        border-radius: 25px;
-        padding-left: 20px;
-        padding-right: 20px;
-        background: white;
-        border: black 3px solid;
-        box-shadow: black 5px 5px 0 0;
-        width: 346px;
-        right: 20px;
-        z-index: 10;
-        padding-top: 0;
-    }
+def load_css():
+    with open("style.css", 'r', encoding='utf-8') as f:
+        css = f.read()
+    return f"<style>{css}</style>"
 
-    #info{
-        display: none;
-    }
+st.markdown(load_css(), unsafe_allow_html=True)
 
-    @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-    }
-
-    .st-emotion-cache-1104ytp b, .st-emotion-cache-1104ytp strong{
-        font-weight: 800!important;
-    }
-
-    .stVerticalBlock:has(#search-now), .stVerticalBlock:has(#carbonIntensity), .stVerticalBlock:has(#vehicle){
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        z-index: 10;
-        width: 74vw;
-        background-color: white;
-        padding: 20px;
-        padding-top: 0;
-        border: black 3px solid;
-        box-shadow: black 3px 4px 0 0;
-        border-radius: 25px;
-    }
-    
-    #search-now{
-        display:none;
-    }
-    
-    .stVerticalBlock:has(#vehicle){
-        left: 20px;
-        top: 20px;
-        width: 22vw;
-    }
-    
-    #vehicle{
-        padding-top: 15px;
-    }
-    
-    .titlecar{
-        color: rgb(79 91 119);
-        font-size: 20px;
-        height: 30px;
-    }
-        
-    .carmodel{
-        font-size: 35px;
-        font-weight: 800;
-        line-height: 35px;
-        margin-bottom: 30px;
-    }
-    
-    button[kind="secondary"], button[kind="secondaryFormSubmit"]{
-        background: black!important;
-        color: white!important;
-    }
-
-    .modal-overlay { 
-        position: fixed;
-        width: 100vw;
-        height: 100vh;
-        background: #000000e8;
-        top: 0;
-        z-index: 15;
-        left: 0;
-    }
-
-    .stVerticalBlock:has(#find-chargers), .stVerticalBlock:has(#prediction-calculator), .stVerticalBlock:has(#carbon-intensity-forecast), .stVerticalBlock:has(#choose-your-car){
-        position: fixed;
-        width: 90vw;
-        height: 90vh;
-
-        top: 50%;
-        left: 50%;
-
-        margin-left: -45vw!important;
-        margin-top: -45vh!important;
-        margin: auto;
-        overflow: scroll;
-        z-index: 20;
-        padding: 70px;
-        border-radius: 25px;
-        background: white;
-        border: black 3px solid;
-        box-shadow: black 5px 5px 0 0;
-    }
-
-    .stVerticalBlock:has(#find-chargers) > div:nth-of-type(2) > div > button, .stVerticalBlock:has(#prediction-calculator) > div:nth-of-type(2) > div > button, .stVerticalBlock:has(#carbon-intensity-forecast) > div:nth-of-type(2) > div > button, .stVerticalBlock:has(#choose-your-car) > div:nth-of-type(2) > div > button{
-        position: absolute;
-        right: 0;
-        top: -40px;
-    }
-    .stVerticalBlock:has(#search-now) > div:nth-of-type(3) > div > button{
-        width: 100%;
-    }
-
-    .stVerticalBlock:has(#search-now) > div:nth-of-type(3) > div > button > div > p{
-        font-size: 22px;
-        font-weight: 800;
-        text-transform: uppercase;
-    }
-    
-    .stVerticalBlock:has(#prediction-calculator) > div:nth-of-type(9) > div {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        padding: 50px;
-    }
-    
-    .stVerticalBlock:has(#prediction-calculator) > div:nth-of-type(9) > div > button > div > p {
-        font-size: 36px;
-        padding-left: 20px;
-        padding-right: 20px;
-        font-weight: 700;
-    }
-
-    #prediction-calculator, #carbon-intensity-forecast, #choose-your-car, #find-chargers{
-        position: absolute;
-        top: -70px;
-    }
-    
-    label > div > p{
-        font-size: 17px!important;
-        font-weight: 700;
-    }
-
-    .stRadio > div{
-        padding: 20px;
-        background: rgb(240, 242, 246);
-        border-radius: 15px;
-    }
-
-    .output{
-        font-size: 30px;
-        font-weight: 700;
-        border: black 3px solid;
-        box-shadow: black 5px 5px 0 0;
-        margin-bottom: 250px;
-        text-align: center;
-        width: 300px;
-        padding: 5px;
-        border-radius: 20px;
-        background-color:white;
-        height: 160px;
-    }
-    .title{
-        color: rgb(79 91 119)
-    }
-    .content{
-        font-size: 80px;
-        color: black;
-        font-weight: 700;
-        height: 60px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .contentinfo{
-        color: black;
-        font-size: 25px;
-    }
-
-    .outputcontainer{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 40px;
-    }
-
-    #time-cost-prediction, #budget-driven-prediction, #charge-cost-prediction{
-        font-weight: 700;
-        text-align: center;
-        font-size: 50px;
-        margin-bottom: 40px;
-    }
-
-    div[data-testid="stTextInput"] label, div[data-testid="stMultiSelect"] label {display: none;}    
-    #carbonIntensity{
-        margin: 0;
-        border: none;
-        box-shadow: none;
-    }
-    .stVerticalBlock:has(#carbonIntensity){
-        position: fixed; 
-        bottom: 20px;
-        left: 20px;
-        top: inherit;
-        right: inherit;
-        width: auto;
-        z-index: 10;
-        display: flex;
-        align-items: center;
-    }
-    .timecointainer{
-        border: 1px solid rgba(0, 0, 0, 0.2);
-        border-radius: 0.5rem;    
-        padding: 25px;
-        text-align: center;
-    }
-    .timetitle{
-        font-size: 50px!important;
-        font-weight: 700;
-        margin: 0!important;
-    }
-    .timecontent{
-        font-weight: 800;
-        font-size: 55px;
-        color: white;
-        background: black;
-        border-radius: 10px;
-        padding: 5px;
-        text-transform:uppercase;
-        line-height: 0;
-        padding-left: 15px;
-        padding-right: 15px;
-    }
-    .untilltiltle{
-        font-size: 30px!important;
-        color: gray;
-        margin: 0;
-        text-align: center;
-    }
-    .untilcontent{
-        font-weight: 800;
-        color: black;
-        font-size: 35px;
-    }
-    .weather{
-        border-width: 1px;
-        border-color: black;
-        text-align: center;
-        border: black 3px solid;
-        box-shadow: black 5px 5px 0 0;
-        border-radius: 15px;
-        padding: 25px;
-        padding-top: 5px;
-        padding-bottom: 5px;
-        background: white;
-    }
-    .emoj{
-        font-size: 35px;
-        height: 50px;
-    }
-    .metric{
-        height: 15px;
-        color: gray;
-        font-size: 18px;
-    }
-    .weathernum{
-        font-size: 34px;
-        font-weight: 800;
-    }
-    .weathercontainer{
-        display: flex;
-        position: fixed;
-        column-gap: 10px;
-        left: 0;
-        bottom: 20px;
-        width: 100vw;
-        justify-content: center;
-        z-index: 1;
-    }
-    .specscontainer {
-        display: flex;
-        flex-wrap: wrap;
-    }
-    .spec {
-        display: inline-block;
-        background: #f0f2f6;
-        border-radius: 8px;
-        padding: 12px;
-        margin: 8px;
-        text-align: center;
-        width: 120px;
-    }
-    .emoji {
-        font-size: 24px;
-    }
-    .specmetric {
-        font-size: 14px;
-        margin-top: 4px;
-        color: #555;
-    }
-    .specnum {
-        font-size: 18px;
-        font-weight: bold;
-        margin-top: 2px;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-inject_css()
 
 #_____Carbon Intensity Data__________________________________________________________________________________
+@st.cache_data(ttl=900) 
 def carbon_forecast(lat: float, lon: float) -> pd.DataFrame:
     """
     Fetch up-to-72 h forecast for the given lat/lon.
@@ -506,6 +92,7 @@ def carbon_forecast(lat: float, lon: float) -> pd.DataFrame:
         [["timestamp", "gco2_kwh"]]
     )
 
+@st.cache_data(ttl=900) 
 def carbon_hisotry(lat: float, lon: float):
     """
     Fetch up-to-72 h forecast for the given lat/lon.
@@ -643,7 +230,7 @@ if st.session_state.get("carboninstensiy"):
         step=dt.timedelta(minutes=1),
         key='time_range'
     )
-    submitted = fc.form_submit_button("Update")
+    submitted = fc.form_submit_button("Find Best Charging Time")
 
     # Run calculation only when form is submitted
     if submitted:
@@ -681,15 +268,18 @@ if st.session_state.get("carboninstensiy"):
     container.markdown('</div>', unsafe_allow_html=True)
 
 #_____Weather Data___________________________________________________________________________________________
-location = Point(LATITUDE, LONGITUDE)
+@st.cache_data(ttl=1800)
+def get_weather():
+    location = Point(LATITUDE, LONGITUDE)
+    # Time range: now → next 24 hours
+    start = datetime.now(ZoneInfo("America/New_York")).replace(tzinfo=None) - timedelta(hours=1)
+    end = start + timedelta(hours=25)
 
-# Time range: now → next 24 hours
-start = datetime.now(ZoneInfo("America/New_York")).replace(tzinfo=None) - timedelta(hours=1)
-end = start + timedelta(hours=25)
-
-# Get forecast
-data = Hourly(location, start, end)
-forecast = data.fetch()
+    # Get forecast
+    data = Hourly(location, start, end)
+    return data.fetch()
+ 
+forecast =  get_weather()
 first = forecast.iloc[0]
 weather = {
     "temp": first['temp'],
@@ -724,7 +314,7 @@ st.markdown(f'''
 
 
 #_____Station Data___________________________________________________________________________________________
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=21600)
 def get_charging_stations():
     url = (
         "https://api.openchargemap.io/v3/poi/?output=json"
@@ -1077,8 +667,8 @@ def get_top5_by_total_time(chargers, origin_lat, origin_lon, api_key, capacity_k
 
 if "stations" not in st.session_state:
     st.session_state.stations = get_charging_stations()
-stations = st.session_state.stations
-results_list = [extract_relevant_data(item) for item in stations]
+    st.session_state.results_list = [extract_relevant_data(item) for item in st.session_state.stations]
+results_list = st.session_state.results_list
 unique_brands = sorted({marker["brand"] for marker in results_list})
 
 with st.container():
@@ -1206,8 +796,9 @@ if st.session_state.get("find_chargers"):
         target_level = st.number_input("Target battery level (%)", min_value=0, max_value=100, key="target_level")
         calculate = st.form_submit_button("Calculate Predictions",disabled=(user_lon is None))
      
-    if calculate:   
-        best5 = get_top5_by_total_time(filtered_markers, user_lat, user_lon, ORS_API_KEY, battery, cur_level, target_level, curve, weather['temp'])
+    if calculate:  
+        with st.spinner("Calculating…"): 
+            best5 = get_top5_by_total_time(filtered_markers, user_lat, user_lon, ORS_API_KEY, battery, cur_level, target_level, curve, weather['temp'])
         html = '''<div class="topTitle">Top Time-Saving Chargers</div><div class="topContainer"><div class="topMetric">
                         <div class="topLoc">Adress</div>
                         <div class="topDrive">Driving Time</div>
@@ -1285,7 +876,7 @@ if click_result:
         st.write(f"**Address:** {click_result['name']}, {click_result['Town']}, {click_result['Postcode']}, {click_result['Country']}")
         if not has_selection:
             st.info("ℹ️ Please first select your car in the Find Car section before you can make charge forecasts.")
-        if st.button("Predict", disabled=not has_selection):
+        if st.button("Forecast", disabled=not has_selection):
             st.session_state["show_predict"] = True
 
         with st.expander("More User Info"):
@@ -1344,7 +935,7 @@ def extract_time_features(timestamp, charging_time):
 def predict_energy(feature_row):
     """feature_row must supply all numeric+categorical columns used above"""
     X_new = pd.DataFrame([feature_row])
-    return model.predict(X_new)[0]*4
+    return model.predict(X_new)[0]*1.5
 
 def predict_duration(feature_dict: dict, desired_kwh: float) -> float:
     """
@@ -1421,79 +1012,80 @@ if st.session_state.get("show_predict"):
     # 4) Render chart INSIDE the modal
     #container.plotly_chart(fig, use_container_width=True)
     
-    if calculate:     
-        price_kwh = 0.30  # constant for simplicity
-        charging_duration = timedelta(minutes=dur)
-        start_time = start_time.replace(minute=0, second=0, microsecond=0, tzinfo=None)
-        times = extract_time_features(start_time, charging_duration)
-        selected_row = forecast.loc[start_time]
-        weatherForecast = {
-            "temp": selected_row['temp'],
-            "prcp": selected_row['prcp'],
-            "wspd": selected_row['wspd'],
-            "rhum": selected_row['rhum'],
-        }
-        combined = {**chargerdata, **weatherForecast, **times}
-        
-        if mode == "Time":
-            #Energy_needed (kWh) = Usable_capacity (kWh)  × (Target_% – Current_%)  ÷ 100
-            desired_kwh = battery * (target_level - cur_level) / 100 
-            timeopt2, energy = estimate_charge_time(cur_level, target_level,battery,chargerdata["Power_kW"], curve, weatherForecast["temp"])
-            combined.pop("Duration_min", None)  # won't raise error if not present
+    if calculate:
+        with st.spinner("Calculating…"):     
+            price_kwh = 0.30  # constant for simplicity
+            charging_duration = timedelta(minutes=dur)
+            start_time = start_time.replace(minute=0, second=0, microsecond=0, tzinfo=None)
+            times = extract_time_features(start_time, charging_duration)
+            selected_row = forecast.loc[start_time]
+            weatherForecast = {
+                "temp": selected_row['temp'],
+                "prcp": selected_row['prcp'],
+                "wspd": selected_row['wspd'],
+                "rhum": selected_row['rhum'],
+            }
+            combined = {**chargerdata, **weatherForecast, **times}
             
-            ci =  forecast_ci.loc[forecast_ci["timestamp"] == start_time, "gco2_kwh"].squeeze()
-            emissions = ci * energy / 1000
+            if mode == "Time":
+                #Energy_needed (kWh) = Usable_capacity (kWh)  × (Target_% – Current_%)  ÷ 100
+                desired_kwh = battery * (target_level - cur_level) / 100 
+                timeopt2, energy = estimate_charge_time(cur_level, target_level,battery,chargerdata["Power_kW"], curve, weatherForecast["temp"])
+                combined.pop("Duration_min", None)  # won't raise error if not present
+                
+                ci =  forecast_ci.loc[forecast_ci["timestamp"] == start_time, "gco2_kwh"].squeeze()
+                emissions = ci * energy / 1000
 
-            container.markdown("### Time & Cost Prediction")
-            container.markdown(f'''
-            <div class="outputcontainer">
-                <div class="output">
-                    <div class="title">Chargin Time</div>
-                    <div class="content">{timeopt2:.2f}</div>
-                    <div class="contentinfo">Minutes</div>
+                container.markdown("### Time Forecast")
+                container.markdown(f'''
+                <div class="outputcontainer">
+                    <div class="output">
+                        <div class="title">Chargin Time</div>
+                        <div class="content">{timeopt2:.2f}</div>
+                        <div class="contentinfo">Minutes</div>
+                    </div>
+                    <div class="output">
+                        <div class="title">Energy Delivered</div>
+                        <div class="content">{energy:.2f}</div>
+                        <div class="contentinfo">Kwh</div>
+                    </div>
+                    <div class="output">
+                        <div class="title">Emissions</div>
+                        <div class="content">{emissions:.2f}</div>
+                        <div class="contentinfo">Kg CO2</div>
+                    </div>
                 </div>
-                <div class="output">
-                    <div class="title">Energy Delivered</div>
-                    <div class="content">{energy:.2f}</div>
-                    <div class="contentinfo">Kwh</div>
-                </div>
-                <div class="output">
-                    <div class="title">Emissions</div>
-                    <div class="content">{emissions:.2f}</div>
-                    <div class="contentinfo">Kg CO2</div>
-                </div>
-            </div>
-            ''', unsafe_allow_html=True)
+                ''', unsafe_allow_html=True)
 
-        elif mode == "Charge":
-            est_kwh = predict_energy(combined)
-            cost = np.round(est_kwh * price_kwh, 2)
-            delta_pct = (est_kwh / battery) * 100            
-            final_soc = cur_level + delta_pct
-            final_soc = max(0.0, min(100.0, final_soc))
-            ci =  forecast_ci.loc[forecast_ci["timestamp"] == start_time, "gco2_kwh"].squeeze()
-            emissions = ci * est_kwh / 1000
-            
-            container.markdown("### Charge & Cost Prediction")
-            container.markdown(f'''
-            <div class="outputcontainer">
-                <div class="output">
-                    <div class="title">Energy delivered</div>
-                    <div class="content">{est_kwh:.2f}</div>
-                    <div class="contentinfo">kWh</div>
+            elif mode == "Charge":
+                est_kwh = predict_energy(combined)
+                cost = np.round(est_kwh * price_kwh, 2)
+                delta_pct = (est_kwh / battery) * 100            
+                final_soc = cur_level + delta_pct
+                final_soc = max(0.0, min(100.0, final_soc))
+                ci =  forecast_ci.loc[forecast_ci["timestamp"] == start_time, "gco2_kwh"].squeeze()
+                emissions = ci * est_kwh / 1000
+                
+                container.markdown("### Charge Forecast")
+                container.markdown(f'''
+                <div class="outputcontainer">
+                    <div class="output">
+                        <div class="title">Energy delivered</div>
+                        <div class="content">{est_kwh:.2f}</div>
+                        <div class="contentinfo">kWh</div>
+                    </div>
+                    <div class="output">
+                        <div class="title">Final SoC</div>
+                        <div class="content">{final_soc:.2f}</div>
+                        <div class="contentinfo">%</div>
+                    </div>
+                    <div class="output">
+                        <div class="title">Emissions</div>
+                        <div class="content">{emissions:.2f}</div>
+                        <div class="contentinfo">Kg CO2</div>
+                    </div>
                 </div>
-                <div class="output">
-                    <div class="title">Final SoC</div>
-                    <div class="content">{final_soc:.2f}</div>
-                    <div class="contentinfo">%</div>
-                </div>
-                <div class="output">
-                    <div class="title">Emissions</div>
-                    <div class="content">{emissions:.2f}</div>
-                    <div class="contentinfo">Kg CO2</div>
-                </div>
-            </div>
-            ''', unsafe_allow_html=True)
+                ''', unsafe_allow_html=True)
 
     
             

@@ -1,15 +1,17 @@
 {
-  "brand": "Aiways",
-  "model": "U5.",
+  "brand": "Audi",
+  "model": "55",
   "specs": {
-    "id": "6033b26c-1b3c-441b-9f78-7b7cd5512051",
-    "brand": "Aiways",
+    "brand": "Audi",
+    "model": "55",
+    "variant": "quattro",
     "vehicle_type": "car",
-    "brand_id": "a43d2607-eead-46c2-9fd5-2ebd3c49d895",
-    "model": "U5.",
-    "release_year": 2022,
-    "variant": "",
-    "usable_battery_size": 60,
+    "usable_battery_size": 86.5,
+    "energy_consumption": {
+      "average_consumption": 23.7
+    },
+    "charging_voltage": 400,
+    "release_year": 2019,
     "ac_charger": {
       "usable_phases": 3,
       "ports": [
@@ -21,19 +23,23 @@
       "ports": [
         "ccs"
       ],
-      "max_power": 60,
+      "max_power": 86.5,
       "charging_curve": [
         {
           "percentage": 0,
-          "power": 60
+          "power": 86.5
         },
         {
-          "percentage": 50,
-          "power": 60
+          "percentage": 30,
+          "power": 86.5
+        },
+        {
+          "percentage": 60,
+          "power": 60.55
         },
         {
           "percentage": 80,
-          "power": 36
+          "power": 34.6
         },
         {
           "percentage": 100,
@@ -42,17 +48,7 @@
       ],
       "is_default_charging_curve": false
     },
-    "energy_consumption": {
-      "average_consumption": 19
-    },
-    "charging_voltage": 400,
-    "url": "https://ev-database.org/car/1678/Aiways-U5",
-    "status": "pending",
-    "error": "empty model name",
-    "updated_at": "2025-04-11T13:42:18.814Z",
-    "isFixingEmptyName": true,
-    "_manually_fixed_fields": [
-      "energy_consumption"
-    ]
+    "brand_id": "89c2668c-0c50-4344-9386-93e4000f7673",
+    "id": "b297de72-827b-429f-85ca-dad99e51f12f"
   }
 }
