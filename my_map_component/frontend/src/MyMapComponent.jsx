@@ -130,10 +130,10 @@ function MyMapComponent(props) {
   useEffect(() => {
     // Create the map only once
     if (!mapRef.current) {
-      mapRef.current =  L.map("myLeafletMap", {
-        center: [48.1371, 11.5754], // your default center
-        zoom: 14,                   // your default zoom
-        zoomControl: false          // disable the zoom control
+      mapRef.current = L.map("myLeafletMap", {
+        center: [markers[0].cx, markers[0].cy], // your default center
+        zoom: 14, // your default zoom
+        zoomControl: false, // disable the zoom control
       });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap contributors",
@@ -190,7 +190,13 @@ function MyMapComponent(props) {
   return (
     <div
       id="myLeafletMap"
-      style={{ width: "100vw", height: "100vh", position: "fixed", top: "0", left:"0" }}
+      style={{
+        width: "100vw",
+        height: "100vh",
+        position: "fixed",
+        top: "0",
+        left: "0",
+      }}
     />
   );
 }
