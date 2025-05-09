@@ -190,7 +190,7 @@ with st.container():
     <div class="output" id="carbonIntensity">
         <div class="title">Carbon Intensity</div>
         <div class="content">{hist_ci.iloc[-1]["gco2_kwh"]}</div>
-        <div class="contentinfo">g of CO₂/Kwh</div>
+        <div class="contentinfo">g of CO₂/kWh</div>
     </div>
     ''', unsafe_allow_html=True)
     if st.button("Lower my Emissions"):
@@ -258,7 +258,7 @@ if st.session_state.get("carboninstensiy"):
                     <p class="timetitle">Lowest Emmsions at  <span class="timecontent">{st.session_state.best_time}</span></p>
                 </div>
                 <div class="timeUntill">
-                    <p class="untilltiltle">Time untill then:  <span class="untilcontent">{st.session_state.time_until}</span></p>
+                    <p class="untilltiltle">Time until then:  <span class="untilcontent">{st.session_state.time_until}</span></p>
                 </div>
             </div>
             ''', unsafe_allow_html=True)
@@ -297,7 +297,7 @@ st.markdown(f'''
         <div class="weather">
             <div class="emoj">💧</div>
             <div class="metric">Humidity</div>
-            <div class="weathernum">{first['rhum']}</div>
+            <div class="weathernum">{first['rhum']} %</div>
         </div>
         <div class="weather">
             <div class="emoj">☔</div>
@@ -306,7 +306,7 @@ st.markdown(f'''
         </div>
         <div class="weather">
             <div class="emoj">💨</div>
-            <div class="metric">WIND</div>
+            <div class="metric">Wind</div>
             <div class="weathernum">{first['wspd']} km/h</div>
         </div>
     </div>
@@ -323,6 +323,7 @@ def get_charging_stations():
     )
     response = requests.get(url)
     return response.json()
+
 
 def extract_relevant_data(item):
     """
@@ -448,12 +449,15 @@ def extract_relevant_data(item):
 def render_specs(specs, container, graph=True, side=False):
     if side==False: container.subheader(f"Specs for {specs.get('brand')} {specs.get('model')}")
     # Prepare entries: emoji, label, value
+    range = specs.get('range')
+    if range == None: s = '-' 
+    else: s = f"{range} km"
     entries = [
         ('🚗', 'Variant', specs.get('variant') or 'Standard'),
         ('📅', 'Year', specs.get('release_year')),
         ('🔋', 'Battery', f"{specs.get('usable_battery_size', specs.get('battery_size'))} kWh"),
         ('⚡', 'Consumption', f"{specs.get('energy_consumption', {}).get('average_consumption')} kWh/100km"),
-        ('📏', 'Range', f"{specs.get('range')} km"),
+        ('📏', 'Range', s),
         ('🔌', 'Voltage', f"{specs.get('charging_voltage')} V"),
         ('⚙️', 'AC Max', f"{specs.get('ac_charger', {}).get('max_power')} kW"),
         ('🚀', 'DC Max', f"{specs.get('dc_charger', {}).get('max_power')} kW"),
@@ -472,11 +476,24 @@ def render_specs(specs, container, graph=True, side=False):
     html += '</div>'
     container.markdown(html, unsafe_allow_html=True)
     if specs.get('dc_charger') and specs['dc_charger'].get('charging_curve') and graph:
-        container.write("**DC Charging Curve**")
         curve = specs['dc_charger']['charging_curve']
-        df_curve = {p['percentage']: p['power'] for p in curve}
-        container.line_chart(df_curve)
+        df = pd.DataFrame(curve).sort_values("percentage")
+        # Build a Plotly Express line chart
+        fig = px.line(
+            df,
+            x="percentage",
+            y="power",
+            title="DC Chargin Curve",
+            labels={
+                "percentage": "Batery Percentage (%)",
+                "power":      "Power (W)"
+            },
+            markers=True  # adds marker at each point
+        )
 
+        # Render in your container, full width:
+        container.plotly_chart(fig, use_container_width=True)
+    
 has_selection = 'specs' in last_sel and last_sel['specs']
 battery = None
 curve = None
@@ -760,38 +777,48 @@ if st.session_state.get("find_chargers"):
         tab1, tab2 = st.tabs(["📍 Address", "📌 Coordinates"])
 
         with tab1:
-            q = st.text_input("Enter address", placeholder="e.g. 23 Robadors, Barcelona")
+            with st.form("address_form"):
+                q = st.text_input("Enter address", placeholder="e.g. 23 Robadors, Barcelona")
+                search = st.form_submit_button("🔍 Search")
             selected = None
-            if len(q) >= 3:
+            if search and len(q) >= 3:
                 params = {"api_key": ORS_API_KEY, "text": q, "size": 5}
                 resp = requests.get(GEOCODE_SEARCH_URL, params=params)
                 resp.raise_for_status()
-                features = resp.json().get("features", [])
-                if features:
-                    st.write("**Select from suggestions:**")
-                    for i, feat in enumerate(features):
-                        label = feat["properties"]["label"]
-                        if st.button(f"📍 {label}", key=f"fwd_{i}"):
-                            selected = feat
-                if selected:
-                    lat, lon = selected["geometry"]["coordinates"]
-                    st.session_state.user_lat = lon
-                    st.session_state.user_lon = lat
-                    st.success(f"**Selected address:** {selected['properties']['label']}")
+                st.session_state.features = resp.json().get("features", [])
+            features = st.session_state.get("features", [])
+            if features:
+                st.write("**Select from suggestions:**")
+                for i, feat in enumerate(features):
+                    label = feat["properties"]["label"]
+                    if st.button(f"📍 {label}", key=f"sugg_{i}"):
+                        # stash your chosen feature
+                        st.session_state.selected_feature = feat
 
-        with tab2:
-            lat = float(st.number_input("Latitude", format="%.6f"))
-            lon = float(st.number_input("Longitude", format="%.6f"))
-            if st.button("Use these coords"):
+            # 4) If something’s been selected, pull it out & confirm
+            if "selected_feature" in st.session_state:
+                feat = st.session_state.selected_feature
+                lon, lat = feat["geometry"]["coordinates"]
                 st.session_state.user_lat = lat
                 st.session_state.user_lon = lon
+                st.success(f"**Selected address:** {feat['properties']['label']}")
+
+        with tab2:
+            with st.form("coord_form"):
+                lat = st.number_input("Latitude", format="%.6f")
+                lon = st.number_input("Longitude", format="%.6f")
+                use = st.form_submit_button("Use These Coordinates")
+            if use:
+                st.session_state.user_lat = lat
+                st.session_state.user_lon = lon
+                st.success(f"**Selected Coordinates:** {lat} {lon}")
     
     user_lat = st.session_state.user_lat
     user_lon = st.session_state.user_lon
     
     # Collect inputs dynamically
     with container.form(key="inputs"):
-        cur_level = st.number_input("Current battery level (%)", min_value=0, max_value=100, key="cur_level")
+        cur_level = st.number_input("Current Battery Level (%)", min_value=0, max_value=100, key="cur_level")
         
         target_level = st.number_input("Target battery level (%)", min_value=0, max_value=100, key="target_level")
         calculate = st.form_submit_button("Calculate Predictions",disabled=(user_lon is None))
@@ -800,9 +827,9 @@ if st.session_state.get("find_chargers"):
         with st.spinner("Calculating…"): 
             best5 = get_top5_by_total_time(filtered_markers, user_lat, user_lon, ORS_API_KEY, battery, cur_level, target_level, curve, weather['temp'])
         html = '''<div class="topTitle">Top Time-Saving Chargers</div><div class="topContainer"><div class="topMetric">
-                        <div class="topLoc">Adress</div>
+                        <div class="topLoc">Address</div>
                         <div class="topDrive">Driving Time</div>
-                        <div class="TopCharge">Charing Time</div>
+                        <div class="TopCharge">Charging Time</div>
                         <div class="TopTotal">Total Time</div>
                     </div>'''
         for i, ch in enumerate(best5, 1):
@@ -826,6 +853,10 @@ if st.session_state.get("find_chargers"):
     elif user_lon is None:
         container.info("ℹ️  Please enter your address first; the button will unlock once we have your location.")      
     container.markdown('</div>', unsafe_allow_html=True)
+
+def check_if_unknown(data):
+    if data == None: return "Unknown"
+    else: return data
 
 
 chargerdata = {}
@@ -872,7 +903,7 @@ if click_result:
             unsafe_allow_html=True
         )
         st.write(f"**Status:** {click_result['Status']}")
-        st.write(f"**Usage Cost:** {click_result['Usage Cost']}")
+        st.write(f"**Usage Cost:** {check_if_unknown(click_result['Usage Cost'])}")
         st.write(f"**Address:** {click_result['name']}, {click_result['Town']}, {click_result['Postcode']}, {click_result['Country']}")
         if not has_selection:
             st.info("ℹ️ Please first select your car in the Find Car section before you can make charge forecasts.")
@@ -880,10 +911,10 @@ if click_result:
             st.session_state["show_predict"] = True
 
         with st.expander("More User Info"):
-            st.write(f"**Is Pay At Location?:** {click_result['Is Pay At Location?']}")
-            st.write(f"**Is Membership Required?r:** {click_result['Is Membership Required?']}")
-            st.write(f"**Is Access Key Required?:** {click_result['Is Access Key Required?']}")
-            st.write(f"**Connections (Detailed):** {click_result['Connections (Detailed)']}")
+            st.write(f"**Pay At Location?:** {check_if_unknown(click_result['Is Pay At Location?'])}")
+            st.write(f"**Membership Required?:** {check_if_unknown(click_result['Is Membership Required?'])}")
+            st.write(f"**Access Key Required?:** {check_if_unknown(click_result['Is Access Key Required?'])}")
+            st.write(f"**Connections (Detailed):** {check_if_unknown(click_result['Connections (Detailed)'])}")
     
 #____Predictions__________________________________________________________________________________________________
 def extract_time_features(timestamp, charging_time):
@@ -995,7 +1026,7 @@ if st.session_state.get("show_predict"):
         dur = 0
         
         if mode == "Time":
-            target_level = st.number_input("Target battery level (%)", min_value=0, max_value=100, key="target_level")
+            target_level = st.number_input("Target Battery Level (%)", min_value=0, max_value=100, key="target_level")
             required.append(target_level is not None)
         elif mode == "Charge":
             dur = st.slider(
@@ -1040,19 +1071,19 @@ if st.session_state.get("show_predict"):
                 container.markdown(f'''
                 <div class="outputcontainer">
                     <div class="output">
-                        <div class="title">Chargin Time</div>
+                        <div class="title">Charging Time</div>
                         <div class="content">{timeopt2:.2f}</div>
                         <div class="contentinfo">Minutes</div>
                     </div>
                     <div class="output">
                         <div class="title">Energy Delivered</div>
                         <div class="content">{energy:.2f}</div>
-                        <div class="contentinfo">Kwh</div>
+                        <div class="contentinfo">kWh</div>
                     </div>
                     <div class="output">
                         <div class="title">Emissions</div>
                         <div class="content">{emissions:.2f}</div>
-                        <div class="contentinfo">Kg CO2</div>
+                        <div class="contentinfo">Kg CO₂</div>
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
@@ -1075,7 +1106,7 @@ if st.session_state.get("show_predict"):
                         <div class="contentinfo">kWh</div>
                     </div>
                     <div class="output">
-                        <div class="title">Final SoC</div>
+                        <div class="title">Final Battery %</div>
                         <div class="content">{final_soc:.2f}</div>
                         <div class="contentinfo">%</div>
                     </div>

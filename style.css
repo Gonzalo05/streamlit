@@ -408,4 +408,5 @@ div[data-testid="stTextInput"] label, div[data-testid="stMultiSelect"] label {di
     font-size: 18px;
     font-weight: bold;
     margin-top: 2px;
+    text-transform: capitalize;
 }
