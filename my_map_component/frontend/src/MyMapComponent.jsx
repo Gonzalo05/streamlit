@@ -1,10 +1,12 @@
+//This is a react module that will be used as our custom streamlit map component. here we will define the funciotnaly of the map. 
+// This includes loading the map and displaying the marker; filtering markers when differnt brands are selected, and highlgight markers when clicked and send their information back go the streamlit python file
 import React, { useEffect, useRef } from "react";
 import { Streamlit, withStreamlitConnection } from "streamlit-component-lib";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// --- Leaflet default icon fix (optional) ---
-import iconUrl from "leaflet/dist/images/marker-icon.png";
+//Leaflet default icon fix - Chatgpt gnerated:
+import iconUrl from "leaflet/d ist/images/marker-icon.png";
 import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
 import shadowUrl from "leaflet/dist/images/marker-shadow.png";
 
@@ -15,7 +17,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl,
 });
 
-// --- Import your custom images ---
+// Hwre we import your custom images
 import teslaIconUrl from "../images/tesla.png";
 import allegoIconUrl from "../images/allego.png";
 import aralIconUrl from "../images/aral.webp";
@@ -23,12 +25,12 @@ import enbwIconUrl from "../images/EnBW.png";
 import eOnIconUrl from "../images/eOn.png";
 import ionityIconUrl from "../images/IONITY.png";
 
-// 1) Normal-size icons (e.g., 40×40 squares)
+//define the icons
 const brandIconsNormal = {
   Tesla: L.icon({
     iconUrl: teslaIconUrl,
     iconSize: [40, 40],
-    iconAnchor: [20, 40], // anchor at bottom center
+    iconAnchor: [20, 40], 
     shadowUrl,
   }),
   Allego: L.icon({
@@ -70,7 +72,7 @@ const brandIconsNormal = {
   }),
 };
 
-// 2) Larger icons for when a marker is clicked (e.g., 60×60 squares)
+// Defining large icons
 const brandIconsLarge = {
   Tesla: L.icon({
     iconUrl: teslaIconUrl,
@@ -117,6 +119,7 @@ const brandIconsLarge = {
   }),
 };
 
+// the components funcionality:
 function MyMapComponent(props) {
   const mapRef = useRef(null);
 
@@ -126,14 +129,14 @@ function MyMapComponent(props) {
 
   // The marker data from Python, e.g. [{name, lat, lon, brand}, ...]
   const markers = props.args.data || [];
-
+  // Funcionality for the map loading and clicking effects - Chatgpt generated:
   useEffect(() => {
     // Create the map only once
     if (!mapRef.current) {
       mapRef.current = L.map("myLeafletMap", {
-        center: [markers[0].cx, markers[0].cy], // your default center
-        zoom: 14, // your default zoom
-        zoomControl: false, // disable the zoom control
+        center: [markers[0].cx, markers[0].cy], 
+        zoom: 14, 
+        zoomControl: false,
       });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap contributors",
@@ -155,9 +158,9 @@ function MyMapComponent(props) {
       // Optional tooltip
       marker.bindTooltip(m.name);
 
-      // On marker click
+      // Funcinality when marker is clicked
       marker.on("click", () => {
-        // 1) Revert the previously selected marker to normal size
+        // Revert the previously selected marker to normal size
         if (lastSelectedMarkerRef.current) {
           const prevBrand = lastSelectedBrandRef.current || "default";
           lastSelectedMarkerRef.current.setIcon(
@@ -165,20 +168,20 @@ function MyMapComponent(props) {
           );
         }
 
-        // 2) Enlarge this marker
+        // Enlarge this marker
         const brand = m.brand || "default";
         marker.setIcon(brandIconsLarge[brand] || brandIconsLarge.default);
 
-        // 3) Center the map on this marker
+        // Center the map on this marker
         mapRef.current.setView([m.lat, m.lon], mapRef.current.getZoom(), {
           animate: true,
         });
 
-        // 4) Update references
+        // Update references
         lastSelectedMarkerRef.current = marker;
         lastSelectedBrandRef.current = brand;
 
-        // 5) Send data back to Python
+        // Send data back to Python
         Streamlit.setComponentValue(m);
       });
     });
@@ -201,5 +204,5 @@ function MyMapComponent(props) {
   );
 }
 
-// Wrap the component with "withStreamlitConnection" so we can receive props from Python
+// Wrap the component with "withStreamlitConnection" so we can receive props from Python - Chatgpt generated:
 export default withStreamlitConnection(MyMapComponent);

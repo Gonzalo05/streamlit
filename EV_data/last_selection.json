@@ -1,0 +1,61 @@
+{
+  "brand": "Tesla",
+  "model": "3 long range",
+  "specs": {
+    "brand": "Tesla",
+    "model": "3 long range",
+    "variant": "performance",
+    "vehicle_type": "car",
+    "usable_battery_size": 73.5,
+    "energy_consumption": {
+      "average_consumption": 16.7
+    },
+    "charging_voltage": 400,
+    "release_year": 2019,
+    "ac_charger": {
+      "usable_phases": 3,
+      "ports": [
+        "type2"
+      ],
+      "max_power": 11
+    },
+    "dc_charger": {
+      "ports": [
+        "ccs"
+      ],
+      "max_power": 73.5,
+      "charging_curve": [
+        {
+          "percentage": 0,
+          "power": 73.5
+        },
+        {
+          "percentage": 20,
+          "power": 73.5
+        },
+        {
+          "percentage": 40,
+          "power": 59
+        },
+        {
+          "percentage": 60,
+          "power": 44
+        },
+        {
+          "percentage": 80,
+          "power": 29
+        },
+        {
+          "percentage": 100,
+          "power": 11
+        }
+      ],
+      "is_default_charging_curve": true
+    },
+    "brand_id": "f37896c3-6bc5-45e1-b442-b9cbc38e3a7c",
+    "id": "02f746ce-7cb0-4ea6-9848-a61aa2c33120",
+    "_manually_fixed_fields": [
+      "charging_curve"
+    ]
+  }
+}

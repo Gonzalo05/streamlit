@@ -18,6 +18,10 @@ import json
 import urllib.parse
 
 
+#This is the the main streamlit file. Since we want to make all the interaction take place in the same page we buld all the features in this file and make the work toghter
+#To avoid slow laoding time we utilized the cache and session variables to load data and functions dynamically
+#to navigate the differnt feature of the project we marked each seciton with comment in the form of `____#Section Name______________________`
+
 #_____Global Variables_______________________________________________________________________________________
 API_KEY = "39dc9e88-98fb-449f-ae0f-f44d99a4fc5b"
 LATITUDE = 35.7968864
@@ -27,8 +31,8 @@ MAX_RESULTS = 500
 EM_TOKEN = "WL8ZxbXPsYcbQsQAoFq9"          
 EM_URL   = "https://api.electricitymap.org/v3/carbon-intensity/forecast"
 EM_URL_HIST = "https://api.electricitymap.org/v3/carbon-intensity/history"
-DATA_PATH = 'data/ev-data.json'
-PERSIST_PATH = 'data/last_selection.json'
+DATA_PATH = 'EV_data/ev-data.json'
+PERSIST_PATH = 'EV_data/last_selection.json'
 ORS_API_KEY = "5b3ce3597851110001cf62484dc6927bf4c24f84b8d06a72563555cc" 
 GEOCODE_SEARCH_URL = "https://api.openrouteservice.org/geocode/search"
 GEOCODE_REVERSE_URL = "https://api.openrouteservice.org/geocode/reverse"
@@ -40,7 +44,8 @@ GEOCODE_REVERSE_URL = "https://api.openrouteservice.org/geocode/reverse"
 def load_data():
     with open(DATA_PATH, 'r', encoding='utf-8') as f:
         return json.load(f)
-
+    
+# Chat GPT generated funciton 
 # Load last selection (brand, model, specs) if exists
 def load_selection():
     if os.path.exists(PERSIST_PATH):
@@ -53,15 +58,17 @@ def load_selection():
 
 last_sel = load_selection()
 
-
-#____Load Models_________________________________________________________________________________________
+#____Load ML Models_________________________________________________________________________________________
 @st.cache_resource
 def load_model(path):
     return joblib.load(path)
 
-model = load_model("predictions/ev_energy_prediction.joblib")
-pipe = load_model("predictions/ev_duration_prediction.joblib")
+model = load_model("ML_models/ev_energy_prediction.joblib")
+pipe = load_model("ML_models/ev_duration_prediction.joblib")
 
+
+#____Load Css Stlying_________________________________________________________________________________________
+#We overwrite streamlits default stylying by injecting our custom css with st.markdown(..., unsafe_allow_html=True)
 @st.cache_resource
 def load_css():
     with open("style.css", 'r', encoding='utf-8') as f:
@@ -72,12 +79,12 @@ st.markdown(load_css(), unsafe_allow_html=True)
 
 
 #_____Carbon Intensity Data__________________________________________________________________________________
+#this funciton loads the carbon forecast for the next 24 in our area in North Carolina using the electricitymap API
+# we use ttl to determine when to update this funciton in the cache
 @st.cache_data(ttl=900) 
 def carbon_forecast(lat: float, lon: float) -> pd.DataFrame:
-    """
-    Fetch up-to-72 h forecast for the given lat/lon.
-    Returns a DataFrame with UTC 'time' index and 'gco2_kwh' column.
-    """
+    #Fetch up-to-72 h forecast for the given lat/lon.
+    #Returns a DataFrame with UTC 'time' index and 'gco2_kwh' column.
     hdrs = {"auth-token": EM_TOKEN}
     params = {"lat": lat, "lon": lon}
     r = requests.get(EM_URL, headers=hdrs, params=params, timeout=15)
@@ -85,19 +92,16 @@ def carbon_forecast(lat: float, lon: float) -> pd.DataFrame:
     
     raw = r.json().get("forecast", [])
 
-    df = pd.DataFrame(raw)             # columns: carbonIntensity, datetime, zone
+    df = pd.DataFrame(raw)             
     df['timestamp'] = pd.to_datetime(df['datetime'], utc=True).dt.tz_convert("America/New_York").dt.tz_localize(None)
     return (
         df.rename(columns={"carbonIntensity": "gco2_kwh"})
         [["timestamp", "gco2_kwh"]]
     )
 
+#Get the carbon history data in cary north carolina in the last 24 hours using the electricitymap API
 @st.cache_data(ttl=900) 
 def carbon_hisotry(lat: float, lon: float):
-    """
-    Fetch up-to-72 h forecast for the given lat/lon.
-    Returns a DataFrame with UTC 'time' index and 'gco2_kwh' column.
-    """
     hdrs = {"auth-token": EM_TOKEN}
     params = {"lat": lat, "lon": lon}
     r = requests.get(EM_URL_HIST, headers=hdrs, params=params, timeout=15)
@@ -105,7 +109,8 @@ def carbon_hisotry(lat: float, lon: float):
     
     raw = r.json().get("history", [])
 
-    df = pd.DataFrame(raw)             # columns: carbonIntensity, datetime, zone
+    #turn the raw data into a pandas dataframe
+    df = pd.DataFrame(raw)             
     df['timestamp'] = pd.to_datetime(df['datetime'], utc=True).dt.tz_convert("America/New_York").dt.tz_localize(None)
     return (
         df
@@ -113,12 +118,9 @@ def carbon_hisotry(lat: float, lon: float):
         [["timestamp", "gco2_kwh"]]
     )
 
-def next_lowest_emission(
-    df: pd.DataFrame,
-    now: pd.Timestamp,
-    start_dt: pd.Timestamp,
-    end_dt: pd.Timestamp
-):
+#Chat GPT generated function:
+# find the time in the carbon intensity forecast when the CI will be lowest in a certain time frame
+def next_lowest_emission(df: pd.DataFrame, now: pd.Timestamp, start_dt: pd.Timestamp,end_dt: pd.Timestamp):
     window_df = df[(df['timestamp'] >= start_dt) & (df['timestamp'] <= end_dt)]
     if window_df.empty:
         raise ValueError(f"No timestamps between {start_dt} and {end_dt}.")
@@ -131,6 +133,8 @@ def next_lowest_emission(
 
 
 #____Carbon Intensity Dynamics_____________________________________________________________________________________
+
+#creating the graph for the carbon intensity
 @st.cache_data
 def make_figure(hist, forecast):
     # Split historical vs forecast
@@ -139,6 +143,7 @@ def make_figure(hist, forecast):
 
     fig = go.Figure()
     df_combined = pd.concat([hist, fcst], axis=0, ignore_index=True)
+    # ChatGPT generated code:
     # 1) Full continuous blue line for everything
     fig.add_trace(go.Scatter(
         x=df_combined["timestamp"], y=df_combined["gco2_kwh"],
@@ -185,7 +190,9 @@ forecast_ci = carbon_forecast(LATITUDE, LONGITUDE)
 hist_ci = carbon_hisotry(LATITUDE, LONGITUDE)
 fig = make_figure(hist_ci, forecast_ci)
 
+#Carbon intensity widget on the map
 with st.container():
+    # To be able to style and customize elements more freelly we use st.markdown(.., unsafe_allow_html=True) to inject custom html into the website
     st.markdown(f'''
     <div class="output" id="carbonIntensity">
         <div class="title">Carbon Intensity</div>
@@ -195,7 +202,9 @@ with st.container():
     ''', unsafe_allow_html=True)
     if st.button("Lower my Emissions"):
         st.session_state["carboninstensiy"] = True
-        
+
+# with session variables we determine what to display on screen. This also helps us with performance 
+#Show the carbon intensity panel caculaiton if session_state has been selected        
 if st.session_state.get("carboninstensiy"):
     # overlay
     st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
@@ -234,18 +243,18 @@ if st.session_state.get("carboninstensiy"):
 
     # Run calculation only when form is submitted
     if submitted:
-        start_ts = pd.Timestamp(start_dt)
-        start_ts = start_ts.tz_localize(tz) if start_ts.tzinfo is None else start_ts.tz_convert(tz)
-        end_ts = pd.Timestamp(end_dt)
-        end_ts = end_ts.tz_localize(tz) if end_ts.tzinfo is None else end_ts.tz_convert(tz)
+        start_ts = pd.Timestamp(start_dt) #chat gpt generated
+        start_ts = start_ts.tz_localize(tz) if start_ts.tzinfo is None else start_ts.tz_convert(tz) #chat gpt generated
+        end_ts = pd.Timestamp(end_dt) #chat gpt generated
+        end_ts = end_ts.tz_localize(tz) if end_ts.tzinfo is None else end_ts.tz_convert(tz) #chat gpt generated
 
         try:
-            minnow = pd.Timestamp.now(ZoneInfo("America/New_York")).replace(tzinfo=None)
+            minnow = pd.Timestamp.now(ZoneInfo("America/New_York")).replace(tzinfo=None)  
             best_ts, delta = next_lowest_emission(df, minnow, start_ts, end_ts)
             # format time as e.g. '6am'
-            time_str = best_ts.strftime('%I%p').lstrip('0').lower()
+            time_str = best_ts.strftime('%I%p').lstrip('0').lower() #chat gpt generated
             # compute hours and minutes
-            total_secs = int(delta.total_seconds())
+            total_secs = int(delta.total_seconds()) #chat gpt generated
             hrs = total_secs // 3600
             mins = (total_secs % 3600) // 60
             delta_str = f"{hrs} hours and {mins} minutes"
@@ -255,7 +264,7 @@ if st.session_state.get("carboninstensiy"):
             container.markdown(f'''
             <div class="timecointainer">
                 <div class="bestTime">
-                    <p class="timetitle">Lowest Emmsions at  <span class="timecontent">{st.session_state.best_time}</span></p>
+                    <p class="timetitle">Lowest Emissions at  <span class="timecontent">{st.session_state.best_time}</span></p>
                 </div>
                 <div class="timeUntill">
                     <p class="untilltiltle">Time until then:  <span class="untilcontent">{st.session_state.time_until}</span></p>
@@ -268,6 +277,8 @@ if st.session_state.get("carboninstensiy"):
     container.markdown('</div>', unsafe_allow_html=True)
 
 #_____Weather Data___________________________________________________________________________________________
+# Gettin the weather data for the next 24hours in cary north cariolina. This will be utlized for the ML and physica based time and charge estimations
+# This data comes fomr the python library meteostat
 @st.cache_data(ttl=1800)
 def get_weather():
     location = Point(LATITUDE, LONGITUDE)
@@ -314,6 +325,7 @@ st.markdown(f'''
 
 
 #_____Station Data___________________________________________________________________________________________
+# Funciton to get the charging station data from the openchargemap API
 @st.cache_data(ttl=21600)
 def get_charging_stations():
     url = (
@@ -325,11 +337,8 @@ def get_charging_stations():
     return response.json()
 
 
+#Here we extract the most important information form the API call and we put it all in a dictoinary
 def extract_relevant_data(item):
-    """
-    Extract more technical and accessibility-related details.
-    Feel free to expand or customize as needed.
-    """
 
     # Basic info
     station_id = item.get("ID", "N/A")
@@ -352,7 +361,6 @@ def extract_relevant_data(item):
             "EnBW (D)": "EnBW",
             "Tesla (Tesla-only charging)": "Tesla",
             "Innogy SE (RWE eMobility)": "Innogy SE",
-            # Optionally, unify "Unknown" to "Unknown" explicitly:
             "Unknown": "Unknown",
             "Be Energised (has-to-be)": "Be Energised",
             "E.ON (DE)": "E.ON",
@@ -445,7 +453,7 @@ def extract_relevant_data(item):
 
 
 #____EV Vehicle Dynamics_________________________________________________________________________________________
-    # Function to render specs cards
+# Function to render specs cards
 def render_specs(specs, container, graph=True, side=False):
     if side==False: container.subheader(f"Specs for {specs.get('brand')} {specs.get('model')}")
     # Prepare entries: emoji, label, value
@@ -462,8 +470,7 @@ def render_specs(specs, container, graph=True, side=False):
         ('⚙️', 'AC Max', f"{specs.get('ac_charger', {}).get('max_power')} kW"),
         ('🚀', 'DC Max', f"{specs.get('dc_charger', {}).get('max_power')} kW"),
     ]
-    # Build HTML
-    
+    # Build HTML 
     if side==False: html = '<div class="specscontainer">'
     else: html = '<div class="specscontainer" id="sidespecs">'
     for emoji, label, value in entries:
@@ -478,7 +485,7 @@ def render_specs(specs, container, graph=True, side=False):
     if specs.get('dc_charger') and specs['dc_charger'].get('charging_curve') and graph:
         curve = specs['dc_charger']['charging_curve']
         df = pd.DataFrame(curve).sort_values("percentage")
-        # Build a Plotly Express line chart
+        # Build a Plotly Express line chart - Chat GPT generated
         fig = px.line(
             df,
             x="percentage",
@@ -490,21 +497,21 @@ def render_specs(specs, container, graph=True, side=False):
             },
             markers=True  # adds marker at each point
         )
-
-        # Render in your container, full width:
         container.plotly_chart(fig, use_container_width=True)
     
 has_selection = 'specs' in last_sel and last_sel['specs']
 battery = None
 curve = None
 voltage = None
+#Check if we the users had previosly already selected the data. If so they we load it back from the saved fil. If not we open the car selection container so they can select it
 if has_selection:
     battery = last_sel['specs'].get('usable_battery_size', last_sel['specs'].get('battery_size'))
     curve = last_sel['specs']['dc_charger']['charging_curve']
     voltage = last_sel['specs'].get('charging_voltage')
 else: 
     st.session_state["vehicle"] = True 
-    
+
+#Car selection widget conatiner    
 with st.container():
     default_brand = last_sel.get('brand', "No Car Selected")
     default_model = last_sel.get('model', '')
@@ -517,6 +524,7 @@ with st.container():
     if st.button("Find My Car"):
         st.session_state["vehicle"] = True 
     
+#if the session is vehicle open the car selection container
 if st.session_state.get("vehicle"):
     # overlay
     st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
@@ -571,24 +579,17 @@ if st.session_state.get("vehicle"):
 
 
 #_____Stations Display and Interactions_____________________________________________________________________
-
-def estimate_charge_time(
-    soc_start: float,
-    soc_end:   float,
-    capacity_kwh: float,
-    station_power: float,
-    curve: list[dict],          # [{"percentage": %, "power": kW}, …]
-    temp: float = None,         # ambient °C
-) -> float:
-    # 1) Build interpolation arrays
+#Estiamte charge time using a physica based equatoin
+def estimate_charge_time(soc_start, soc_end, capacity_kwh, station_power, curve, temp):
+    # Build interpolation arrays
     soc_pts   = np.array([pt["percentage"] for pt in curve])
     p_car_pts = np.array([pt["power"]      for pt in curve])
-    # 2) Temperature derate 
+    # Temperature derate 
     if temp is not None:
         fT = 1.5 if 15 <= temp <= 35 else 1.2
     else:
         fT = 1.4
-    # 3) Discretize SOC
+    # Discretize SOC
     steps = 100
     socs = np.linspace(soc_start, soc_end, steps+1)
     times = []
@@ -598,10 +599,10 @@ def estimate_charge_time(
 
     # Since energy dE = C(u) × d(SOC) and power P = dE/dt,
     # then dt = dE / P = (C(u) / 100) * d(SOC) / P(SOC)
-    #
     # So the total charging time T is:
     # T = ∫ from SOC1 to SOC2 of [ (C(u) / 100) * d(SOC) / P_delivered(SOC) ]
     # So we approximate it using the sums over small steps
+    # ChatGPT generated loop:
     for i in range(steps):
         soc_mid = 0.5*(socs[i] + socs[i+1])
         # interpolate car’s power at soc_mid
@@ -618,7 +619,8 @@ def estimate_charge_time(
 
     return cum_time, cum_energy
 
-
+#Chat GPT generated function:
+#Find distance of a point to another using lat an dlong
 def haversine_distance(lat1, lon1, lat2, lon2):
     R = 6371.0
     φ1, φ2 = math.radians(lat1), math.radians(lat2)
@@ -626,6 +628,7 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     a = math.sin(dφ/2)**2 + math.cos(φ1)*math.cos(φ2)*math.sin(dλ/2)**2
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
+#Filter chargers by how far away they are from the selected coordinates
 def filter_within_radius(chargers, lat, lon, radius_km=10):
     nearby = []
     for c in chargers:
@@ -635,6 +638,7 @@ def filter_within_radius(chargers, lat, lon, radius_km=10):
             nearby.append(c)
     return nearby
 
+#Find driving time of a charger form the selected point using the openrouteservice API - ChatGPT generated:
 def get_driving_times_ors(origin, destinations, api_key):
     url = "https://api.openrouteservice.org/v2/matrix/driving-car"
     headers = {"Authorization": api_key, "Content-Type": "application/json"}
@@ -650,11 +654,12 @@ def get_driving_times_ors(origin, destinations, api_key):
     resp.raise_for_status()
     return resp.json()['durations'][0]
 
-def get_top5_by_total_time(chargers, origin_lat, origin_lon, api_key, capacity_kwh, soc_start, soc_end, curve, temp, radius_km=10):
+#Find the top 5 most time saving charger by finding their driving time and Charging suming them in total time and selecting the top 5 with least time
+def get_top5_by_total_time(chargers, origin_lat, origin_lon, api_key, capacity_kwh, soc_start, soc_end, curve, temp, radius_km=20):
     nearby = filter_within_radius(chargers, origin_lat, origin_lon, radius_km)
     if not nearby:
         return []
-
+    #Here we get the driving time for each market
     drive_secs = get_driving_times_ors((origin_lat, origin_lon), nearby, api_key)
 
     results = []
@@ -664,7 +669,6 @@ def get_top5_by_total_time(chargers, origin_lat, origin_lon, api_key, capacity_k
         c = charger.copy()
         c['drive'] = dt / 60
 
-        # Use charger['power_kw'] as station_power
         station_power = c.get('power_kw') or 3.7
 
         c['charge'], _ = estimate_charge_time(
@@ -681,13 +685,14 @@ def get_top5_by_total_time(chargers, origin_lat, origin_lon, api_key, capacity_k
     return results[:5]
 
 
-
+#Check if staion data has already been laoded, if not call the charger data loading functions
 if "stations" not in st.session_state:
     st.session_state.stations = get_charging_stations()
     st.session_state.results_list = [extract_relevant_data(item) for item in st.session_state.stations]
 results_list = st.session_state.results_list
 unique_brands = sorted({marker["brand"] for marker in results_list})
 
+#Search widge
 with st.container():
     st.title("Search Now!")
     selected_brands = st.multiselect(
@@ -702,15 +707,16 @@ with st.container():
         st.info("ℹ️ Please first select your car in the Find Car section before you can make charge forecasts.")
 
 
-# 4) Filter marker data based on selected brands
+# Filter marker data based on selected brands
 filtered_markers = [
     m for m in results_list
     if m["brand"] in selected_brands
 ]
 
-# 5) Render the map with only the filtered markers
+# Render the map with only the filtered markers
 click_result = my_map(data=filtered_markers)
 
+# function to break down minute time eg 234min into a readable time string
 def hour_display(total_minutes):
     # total minutes, rounded to nearest int
     hours = total_minutes // 60
@@ -721,25 +727,8 @@ def hour_display(total_minutes):
     )    
     return text
 
-def make_gmaps_directions_link(
-    start_lat: float,
-    start_lon: float,
-    dest_lat: float,
-    dest_lon: float,
-    start_label: str = None,
-    dest_label: str = None,
-) -> str:
-    """
-    Build a Google Maps URL showing driving directions from the start point to the destination.
-    
-    :param start_lat: latitude of the origin
-    :param start_lon: longitude of the origin
-    :param dest_lat: latitude of the destination
-    :param dest_lon: longitude of the destination
-    :param start_label: optional human-readable label for the origin (e.g. "Home")
-    :param dest_label: optional human-readable label for the destination (e.g. "Charger")
-    :return: URL string
-    """
+#function to create a Google Maps URL showing driving directions from the start point to the destination.
+def make_gmaps_directions_link(start_lat, start_lon, dest_lat, dest_lon, start_label = None, dest_label = None):
     base_url = "https://www.google.com/maps/dir/?api=1"
     params = {
         "origin": f"{start_lat},{start_lon}",
@@ -751,10 +740,10 @@ def make_gmaps_directions_link(
     if dest_label:
         params["destination_place_id"] = dest_label
 
-    return base_url + "&" + urllib.parse.urlencode(params)
+    return base_url + "&" + urllib.parse.urlencode(params) #chatGPT generated line
 
 
-
+#Show the find top chargers box container
 if st.session_state.get("find_chargers"):
     # overlay
     st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
@@ -765,7 +754,6 @@ if st.session_state.get("find_chargers"):
     if container.button("✕", key="modal_close"):
         st.session_state["find_chargers"] = False
         st.rerun()
-    # --- Form contents ---
     container.markdown("# Find Chargers")
 
     if "user_lat" not in st.session_state:
@@ -775,12 +763,13 @@ if st.session_state.get("find_chargers"):
 
     with container.container():
         tab1, tab2 = st.tabs(["📍 Address", "📌 Coordinates"])
-
+        #user can either input his adress and we find the coordinates of thosse adress using the openrouteservice api
         with tab1:
             with st.form("address_form"):
-                q = st.text_input("Enter address", placeholder="e.g. 23 Robadors, Barcelona")
+                q = st.text_input("Enter address", placeholder="e.g. 23 Robadors")
                 search = st.form_submit_button("🔍 Search")
             selected = None
+            # if they press the seach button and the input is long enough we find possible suggestions of adress based on the users's input using the openrouteservice API
             if search and len(q) >= 3:
                 params = {"api_key": ORS_API_KEY, "text": q, "size": 5}
                 resp = requests.get(GEOCODE_SEARCH_URL, params=params)
@@ -791,18 +780,19 @@ if st.session_state.get("find_chargers"):
                 st.write("**Select from suggestions:**")
                 for i, feat in enumerate(features):
                     label = feat["properties"]["label"]
+                    # if they press on an adress we store the data from the API for this specific adress
                     if st.button(f"📍 {label}", key=f"sugg_{i}"):
-                        # stash your chosen feature
                         st.session_state.selected_feature = feat
 
-            # 4) If something’s been selected, pull it out & confirm
+            # If an adress has been selected, pull it out & confirm
             if "selected_feature" in st.session_state:
                 feat = st.session_state.selected_feature
                 lon, lat = feat["geometry"]["coordinates"]
+                # we save lat and lon in session variables so we can acces them outside of this form
                 st.session_state.user_lat = lat
                 st.session_state.user_lon = lon
                 st.success(f"**Selected address:** {feat['properties']['label']}")
-
+        # or they can directly input their coordinates
         with tab2:
             with st.form("coord_form"):
                 lat = st.number_input("Latitude", format="%.6f")
@@ -816,13 +806,14 @@ if st.session_state.get("find_chargers"):
     user_lat = st.session_state.user_lat
     user_lon = st.session_state.user_lon
     
-    # Collect inputs dynamically
+    # Collect inputs 
     with container.form(key="inputs"):
         cur_level = st.number_input("Current Battery Level (%)", min_value=0, max_value=100, key="cur_level")
         
         target_level = st.number_input("Target battery level (%)", min_value=0, max_value=100, key="target_level")
         calculate = st.form_submit_button("Calculate Predictions",disabled=(user_lon is None))
-     
+    
+    #If they hit the button run the calculations
     if calculate:  
         with st.spinner("Calculating…"): 
             best5 = get_top5_by_total_time(filtered_markers, user_lat, user_lon, ORS_API_KEY, battery, cur_level, target_level, curve, weather['temp'])
@@ -860,13 +851,10 @@ def check_if_unknown(data):
 
 
 chargerdata = {}
-# 6) If a marker is clicked, show a stylized info box
+# If a marker is clicked, show a info box
 if click_result:
     geolocator = Nominatim(user_agent="my_map_app")
     location = geolocator.reverse(f"{click_result['lat']}, {click_result['lon']}")
-    #address = location.address if location else "Unknown address"
-
-    # Build a Google Maps link for the lat/lon
     #google_maps_link = f"https://www.google.com/maps/search/?api=1&query={click_result['Latitude']},{click_result['Longitude']}"
     
     marker_data = next(
@@ -903,7 +891,6 @@ if click_result:
             unsafe_allow_html=True
         )
         st.write(f"**Status:** {click_result['Status']}")
-        st.write(f"**Usage Cost:** {check_if_unknown(click_result['Usage Cost'])}")
         st.write(f"**Address:** {click_result['name']}, {click_result['Town']}, {click_result['Postcode']}, {click_result['Country']}")
         if not has_selection:
             st.info("ℹ️ Please first select your car in the Find Car section before you can make charge forecasts.")
@@ -917,24 +904,25 @@ if click_result:
             st.write(f"**Connections (Detailed):** {check_if_unknown(click_result['Connections (Detailed)'])}")
     
 #____Predictions__________________________________________________________________________________________________
+#Do the necessary feature engeniering in the time data so we can pass it to the ML model
 def extract_time_features(timestamp, charging_time):
     ts_utc = pd.to_datetime(timestamp, utc=True)
     # now ts_utc is always tz=UTC
     ts_local = ts_utc.tz_convert("America/New_York")
     
-    # 3) Extract components
+    # Extract components
     hour      = ts_local.hour
     dow       = ts_local.dayofweek      # 0=Monday, …, 6=Sunday
     month     = ts_local.month
     is_weekend = int(dow >= 5)
     
-    # 4) Cyclical encodings
+    # Cyclical encodings - Chat GPT generated
     hour_sin  = np.sin(2 * np.pi * hour  / 24)
     hour_cos  = np.cos(2 * np.pi * hour  / 24)
     month_sin = np.sin(2 * np.pi * month / 12)
     month_cos = np.cos(2 * np.pi * month / 12)
     
-    # 5) Parse charging_time into minutes
+    # Parse charging_time into minutes - Chat GPT generated
     if isinstance(charging_time, str):
         td = pd.to_timedelta(charging_time)
     elif isinstance(charging_time, timedelta):
@@ -944,6 +932,7 @@ def extract_time_features(timestamp, charging_time):
     duration_min = td.total_seconds() / 60
     
     today = date.today()
+    #holiday information
     nc_holidays = holidays.US(state='NC')
     is_holiday_bool = today in nc_holidays
     is_holiday = int(is_holiday_bool)
@@ -963,21 +952,18 @@ def extract_time_features(timestamp, charging_time):
         "holiday_name": holiday_name_today
     }
 
+# Predict energy delivered using the energy ML model
 def predict_energy(feature_row):
-    """feature_row must supply all numeric+categorical columns used above"""
     X_new = pd.DataFrame([feature_row])
-    return model.predict(X_new)[0]*1.5
+    return model.predict(X_new)[0]*7
 
+# Predict time of charge using the time ML model
 def predict_duration(feature_dict: dict, desired_kwh: float) -> float:
-    """
-    feature_dict: all numeric & categorical features except DesiredEnergy
-    desired_kwh : user’s requested energy to add
-    returns minutes required at this charger
-    """
     row = {**feature_dict, "DesiredEnergy": desired_kwh}
     X_new = pd.DataFrame([row])
     return pipe.predict(X_new)[0]
 
+# Show the individual prediction box container
 if st.session_state.get("show_predict"):
     # overlay
     st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
@@ -1009,7 +995,6 @@ if st.session_state.get("show_predict"):
         # Prepare display labels (just hour:minute, but you still get full datetime back)
         labels = [dt.strftime("%Y-%m-%d %H:%M") for dt in hourly]
 
-
         start_time = st.selectbox(
             "Start Charge",
             options=hourly,
@@ -1040,12 +1025,12 @@ if st.session_state.get("show_predict"):
             required.append(dur > 0)
         calculate = st.form_submit_button("Calculate Predictions")
     
-    # 4) Render chart INSIDE the modal
+    # Render chart INSIDE the modal
     #container.plotly_chart(fig, use_container_width=True)
     
+    # if user clicks on the button calcualte the prediction according to the data they inputed
     if calculate:
         with st.spinner("Calculating…"):     
-            price_kwh = 0.30  # constant for simplicity
             charging_duration = timedelta(minutes=dur)
             start_time = start_time.replace(minute=0, second=0, microsecond=0, tzinfo=None)
             times = extract_time_features(start_time, charging_duration)
@@ -1067,6 +1052,7 @@ if st.session_state.get("show_predict"):
                 ci =  forecast_ci.loc[forecast_ci["timestamp"] == start_time, "gco2_kwh"].squeeze()
                 emissions = ci * energy / 1000
 
+                #Display the results of the predictions
                 container.markdown("### Time Forecast")
                 container.markdown(f'''
                 <div class="outputcontainer">
@@ -1090,7 +1076,6 @@ if st.session_state.get("show_predict"):
 
             elif mode == "Charge":
                 est_kwh = predict_energy(combined)
-                cost = np.round(est_kwh * price_kwh, 2)
                 delta_pct = (est_kwh / battery) * 100            
                 final_soc = cur_level + delta_pct
                 final_soc = max(0.0, min(100.0, final_soc))
