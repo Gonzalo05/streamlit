@@ -955,7 +955,7 @@ def extract_time_features(timestamp, charging_time):
 # Predict energy delivered using the energy ML model
 def predict_energy(feature_row):
     X_new = pd.DataFrame([feature_row])
-    return model.predict(X_new)[0]*7
+    return model.predict(X_new)[0]*5
 
 # Predict time of charge using the time ML model
 def predict_duration(feature_dict: dict, desired_kwh: float) -> float:
